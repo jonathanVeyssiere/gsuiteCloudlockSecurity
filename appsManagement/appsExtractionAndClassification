@@ -1,0 +1,153 @@
+function UntrustedAppsList() {
+
+  var document          = SpreadsheetApp.getActive();
+  var mysheetfolder     = document.getSheetByName("ExtractCloudlock");  
+  var myparameterfolder = document.getSheetByName("Commandes manuelles");
+  var rangeparameter    = myparameterfolder.getRange(12,1); 
+  var classification   = rangeparameter.getValue();
+  
+  var url               = "https://api.cloudlock.com/api/v2/apps?classification="
+  
+  var token             ="your token here"
+  var headers           = 
+    {
+    "contentType": "application/json",
+    "headers":
+      {
+       "method" : "GET",  
+      "Authorization": "Bearer "+token,
+      }
+    };
+
+  var limit             = 100
+  var offset            = 0
+  var response_api      = UrlFetchApp.fetch(url+classification+'&offset='+offset+'&limit='+limit, headers);
+
+  var data_api          = JSON.parse(response_api.getContentText());
+  var tableau           = [];
+  tableau.push(data_api);  
+  
+ while (data_api['results']>0) 
+  {
+    offset = offset + limit;
+    response_api      = UrlFetchApp.fetch(url+classification+'&offset='+offset+'&limit='+limit, headers);
+    data_api          = JSON.parse(response_api.getContentText());
+    tableau.push(data_api);
+  };
+ 
+  var document          = SpreadsheetApp.getActive();
+  var mysheetfolder     = document.getSheetByName("ExtractCloudlock");  
+  
+  ResetGoogleAdminConsolerightsrequest()
+  var compteur = 2;
+  
+  for (i=0; i < tableau.length; i++) 
+  {
+  tableau[i]['items'].forEach(function(entity) {
+  var mysheetfolder     = document.getSheetByName("ExtractCloudlock");  
+    
+    var range = mysheetfolder.getRange(compteur,1,1,23);
+    var values = [extractContent(entity, []) ];
+    range.setValues(values);
+    compteur++; 
+  });}
+  
+  ModifyClassificationAll()
+  
+
+function extractContent(data, result) {
+  Object.keys(data).forEach(
+    function (key) {
+      if (Array.isArray(data[key])) {
+        var tmp = '';
+        data[key].forEach(function(value) {
+          tmp += value + ' / ';
+        });
+        result.push(tmp);
+      } else if (Object(data[key]) === data[key]) {
+        result.concat(extractContent( data[key], result ));
+      } else {
+        result.push(data[key]);
+      }
+    }
+  );
+  return result;
+}
+
+ 
+function extractHeaders(data, result) {
+  Object.keys(data).forEach(
+    function (key) {
+      if (Array.isArray(data[key])) {
+        result.push(key);
+      } else if (Object(data[key]) === data[key]) {
+        result.concat(extractHeaders( data[key], result ));
+      } else {
+        result.push(key);
+      }
+    }
+  );
+  return result;
+}
+  
+
+  function ResetGoogleAdminConsolerightsrequest() 
+{  
+  var document       = SpreadsheetApp.getActive();
+  var mySheetDB      =  document.getSheetByName("ExtractCloudlock");  
+  
+  mySheetDB.getRange("A2:W10000").clearContent();
+        return;
+} 
+  
+ function ModifyClassification(application_id,classification) {
+
+  var url               = "https://api.cloudlock.com/api/v2/apps/"+application_id+"/classification"
+  
+  var token             ="your token here"
+  var body              = {"type": classification ,"method": "manual", "reason_id": 4 ,"other_reason" : "Automatic Classification System"};
+  var headers           = 
+    {
+    "contentType": "application/json",
+    "headers":
+      {
+       "method" : "POST",  
+      "Authorization": "Bearer "+token,
+      },
+      "payload": JSON.stringify(body)
+    };
+  
+  var response_api      = UrlFetchApp.fetch(url, headers);
+}
+
+function modifyClassificationAll() {
+
+  var document          = SpreadsheetApp.getActive();
+  var mysheetfolder     = document.getSheetByName("ClassificationAFaireAPI"); 
+  var myapplist         = mysheetfolder.getDataRange().getValues();
+  var textMail          = 'Modification done\n';
+  var textMailErrors    = "Errors\n";
+  
+  myapplist.shift()
+  myapplist.forEach(function(line) {
+   
+   var classification   = line[2] ;
+   var application_id   = line[1] ;
+    
+    try {
+      ModifyClassification(application_id,classification)
+      textMail += '\n';
+      textMail = textMail + line[0] + ' : ' + line[2] + '\n';
+    } catch (e) {
+      textMailErrors += '\n';
+      textMailErrors = textMailErrors + line[0] + ' : ' + classification +  '\n';
+      textMailErrors = textMailErrors + e + '\n';
+    }
+  });
+  textMail = textMail + '\n' + textMailErrors;
+  
+  var today = new Date();
+  var title = "Rapport d'activité sécurité Apps - "+today;
+  GmailApp.sendEmail("collaborative.tools@decathlon.com", title, textMail);
+} 
+}
